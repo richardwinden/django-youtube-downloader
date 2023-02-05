@@ -1,0 +1,92 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="w-100 text-center">
+        <h1>Enter your Video url</h1>
+    </div>
+    <div>
+        <div class="row w-50 mx-auto" id="VideoDetails" style="display: none">
+            <div class="col-3"><img width="130" id="videoThumbnail" src=""></div>
+            <div class="col-9"><h4 id="VideoTitle"></h4></div>
+        </div>
+        <form id="VideoUrlForm">
+            <div class="w-50 mx-auto mt-3">
+                <input class="form-control " name="video_url" id="VideoUrlInputId">
+            </div>
+            <div class="w-50 mx-auto mt-3" style="display: none">
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
+                         id="ProgressBar" aria-label="Basic example"
+                         aria-valuenow="0"
+                         aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+            </div>
+            <div class="w-50 mx-auto mt-3">
+                <button type="submit" class="btn btn-outline-secondary w-100" id="VideoDownloadButton">Download</button>
+            </div>
+
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    $('#VideoUrlForm').submit(function () {
+        let progress = 2
+        event.preventDefault()
+        var video_code = $("#VideoUrlInputId").val().split("https://www.youtube.com/watch?v=")[1].split("&")[0]
+        $("#VideoDownloadButton").prop("disabled", true).html('<div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>')
+        $('#ProgressBar').css('width', progress + '%').attr('aria-valuenow', progress);
+        $("#VideoDetails").show()
+        $.get("/api/video?code=" + video_code, function (r) {
+            console.log(r)
+            $("#videoThumbnail").attr("src", r["thumbnail_url"])
+            $("#VideoTitle").text(r["title"])
+
+            function t() {
+
+                $('#ProgressBar').parent("div").parent("div").show()
+                var check = function () {
+                    $.get("/api/get-progress/" + r["download_id"], function (p) {
+                        progress = p["progress"]
+                        $('#ProgressBar').css('width', progress + '%').attr('aria-valuenow', progress);
+                    }).fail(function () {
+                        progress = 100
+                        $('#ProgressBar').css('width', progress + '%').attr('aria-valuenow', progress);
+                    })
+                    if (progress >= 100) {
+                        return false
+                    } else {
+                        setTimeout(check, 1000); // check again in a second
+                    }
+                }
+
+                check()
+            }
+
+            function o() {
+                fetch("/download/youtube/" + video_code + "?download=" + r["download_id"])
+                    .then(response => response.blob())
+                    .then(blob => {
+                        const link = document.createElement("a");
+                        link.href = URL.createObjectURL(blob);
+                        link.download = r["filename"];
+                        link.click();
+                    }).then(function () {
+                    $("#VideoDownloadButton").prop("disabled", false).html('Download')
+                })
+            }
+
+            const progress_bar_update = t()
+            const download_video = o()
+            Promise.all([progress_bar_update, download_video])
+
+
+        })
+
+
+    })
+</script>
+{% endblock %}
+
